@@ -4,6 +4,10 @@
 #include <fstream>
 #include "RectangleReasoning.h"
 
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
+
 #define MAX_RUNTIME4PAIR 6000
 // takes the paths_found_initially and UPDATE all (constrained) paths found for agents from curr to start
 // also, do the same for ll_min_f_vals and paths_costs (since its already "on the way").
@@ -255,7 +259,7 @@ int ICBSSearch::getEdgeWeight(int a1, int a2, const vector<list<Constraint>> & c
 			vector<vector<PathEntry>> initial_paths(2);
 			initial_paths[0] = *paths[a1];
 			initial_paths[1] = *paths[a2];
-			ICBSSearch solver2(ml, engines, cons, initial_paths, 1.0, 0, heuristics_type::CG, true, rectangleReasoning, INT_MAX, std::min(1000.0, time_limit - runtime), 0);
+			ICBSSearch solver2(ml, engines, cons, initial_paths, 1.0, 0, heuristics_type::CG, true, rectangleReasoning, INT_MAX, std::min(1000.0, time_limit - runtime), 0, false);
 			solver2.runICBSSearch();
 			if ((rst ==0 && solver2.solution_cost > (int)(initial_paths.size() - initial_paths.size() + 2)) &&
 				(rst == 1 && solver2.solution_cost == (int)(initial_paths.size() - initial_paths.size() + 2)))
@@ -275,7 +279,7 @@ int ICBSSearch::getEdgeWeight(int a1, int a2, const vector<list<Constraint>> & c
 		initial_paths[1] = *paths[a2];
 		double cutoffTime = std::min(MAX_RUNTIME4PAIR * 1.0, time_limit - runtime);
 		int upperbound = initial_paths[0].size() + initial_paths[1].size() + 10;
-		ICBSSearch solver(ml, engines, cons, initial_paths, 1.0, max(rst, 0), heuristics_type::CG, true, rectangleReasoning, upperbound, cutoffTime, scr);
+		ICBSSearch solver(ml, engines, cons, initial_paths, 1.0, max(rst, 0), heuristics_type::CG, true, rectangleReasoning, upperbound, cutoffTime, scr, false);
 		solver.max_num_of_mdds = this->max_num_of_mdds;
 		solver.runICBSSearch();
 		if (solver.runtime >= cutoffTime) // time out
@@ -1102,6 +1106,11 @@ void ICBSSearch::printStrategy() const
 
 bool ICBSSearch::runICBSSearch() 
 {
+	if(isMain == true)
+	{
+		getCTStats();
+	}
+
 	if (screen > 0) // 1 or 2
 		printStrategy();
 	// set timer
@@ -1307,6 +1316,193 @@ bool ICBSSearch::runICBSSearch()
 	return solution_found;
 }
 
+void ICBSSearch::getCTStats() 
+{
+
+	if (screen > 0) // 1 or 2
+		printStrategy();
+	// set timer
+	start = std::clock();
+	std::clock_t t1;
+
+	// start is already in the open_list
+	int curr_depth = 0;
+
+	while (!focal_list.empty()) 
+	{
+		ICBSNode* curr = focal_list.top();
+		focal_list.pop();
+		open_list.erase(curr->open_handle);
+
+		if(curr->depth > curr_depth)
+		{
+			writeJSON();
+			curr_depth = curr->depth;
+		}
+
+		// takes the paths_found_initially and UPDATE all constrained paths found for agents from curr to dummy_start (and lower-bounds)
+		t1 = std::clock();
+		updatePaths(curr);
+		runtime_updatepaths += (std::clock() - t1) * 1000.0 / CLOCKS_PER_SEC;
+
+		if (curr->num_of_collisions == 0) //no conflicts
+		{
+			recordGoalNode(curr);
+			continue;
+		}
+		else if (h_type == heuristics_type::NONE) // No heuristics
+		{
+			t1 = std::clock();
+			if (PC) // prioritize conflicts
+				classifyConflicts(*curr);
+			chooseConflict(*curr);
+			runtime_conflictdetection += (std::clock() - t1) * 1000.0 / CLOCKS_PER_SEC;
+		}
+		else if (curr->conflict == nullptr) //use h value, and h value has not been computed yet
+		{
+			if (screen == 3)
+			{
+				std::cout << std::endl << "****** Compute h for #" << curr->time_generated << " with f= " << curr->g_val <<
+					"+" << curr->h_val << " (";
+				for (int i = 0; i < num_of_agents; i++)
+					std::cout << paths[i]->size() - 1 << ", ";
+				std::cout << ") and #conflicts = " << curr->num_of_collisions << std::endl;
+			}
+
+			t1 = std::clock();
+			if (PC) // prioritize conflicts
+				classifyConflicts(*curr);
+			runtime_conflictdetection += (std::clock() - t1) * 1000.0 / CLOCKS_PER_SEC;
+
+			t1 = std::clock();
+			int h = computeHeuristics(*curr);	
+			double runtime_h = (std::clock() - t1) * 1000.0 / CLOCKS_PER_SEC;
+			runtime_computeh += runtime_h;
+			HL_num_heuristics++;
+
+			if (h < 0) // no solution, so prune this node
+			{
+				curr->clear();
+				if (open_list.size() == 0)
+				{
+					solution_found = false;
+					break;
+				}
+				updateFocalList();
+				continue;
+			}
+
+			curr->h_val = std::max(h, curr->h_val); // use consistent h values
+			curr->f_val = curr->g_val + curr->h_val;
+
+			if (screen == 2)
+				curr->printConflictGraph(num_of_agents);
+
+			chooseConflict(*curr);
+
+			if (curr->f_val > focal_list_threshold)
+			{	
+				if (screen == 3)
+				{
+					std::cout << "Reinsert the node with f =" << curr->g_val << "+" << curr->h_val << std::endl;
+				}
+
+				curr->open_handle = open_list.push(curr);
+				updateFocalList();
+				continue;
+			}
+		}
+
+		recordRegularNode(curr);
+
+		 //Expand the node
+		HL_num_expanded++;
+
+		curr->time_expanded = HL_num_expanded;
+		if (screen == 3)
+			std::cout << "Expand Node " << curr->time_generated << " ( " << curr->f_val << "= " << curr->g_val << " + " <<
+				curr->h_val << " ) on conflict " << *curr->conflict << std::endl;
+		ICBSNode* n1 = new ICBSNode();
+		ICBSNode* n2 = new ICBSNode();
+			
+		n1->agent_id = get<0>(*curr->conflict);
+		n2->agent_id = get<1>(*curr->conflict);
+
+		if (get<2>(*curr->conflict) < 0) // Rectangle conflict
+		{
+			int Rg = -1 - get<2>(*curr->conflict);
+			int S1_t = get<3>(*curr->conflict);
+			int S2_t = get<4>(*curr->conflict);
+			const MDD* mdd1 = buildMDD(*curr, n1->agent_id);
+			const MDD* mdd2 = buildMDD(*curr, n2->agent_id);
+			addModifiedBarrierConstraints(*paths[get<0>(*curr->conflict)], *paths[get<1>(*curr->conflict)],
+				mdd1, mdd2, S1_t, S2_t, Rg, ml->cols, n1->constraints, n2->constraints);
+		}
+		else if (get<3>(*curr->conflict) < 0) // vertex conflict
+		{
+			n1->constraints.push_back(make_tuple(get<2>(*curr->conflict), -1, get<4>(*curr->conflict)));
+			n2->constraints.push_back(make_tuple(get<2>(*curr->conflict), -1, get<4>(*curr->conflict)));
+		}
+		else // edge conflict
+		{
+			n1->constraints.push_back(make_tuple(get<2>(*curr->conflict), get<3>(*curr->conflict), get<4>(*curr->conflict)));
+			n2->constraints.push_back(make_tuple(get<3>(*curr->conflict), get<2>(*curr->conflict), get<4>(*curr->conflict)));
+		}
+
+		bool Sol1 = false, Sol2 = false;
+		vector<vector<PathEntry>*> copy(paths);
+		Sol1 = generateChild(n1, curr);
+		if (screen == 3 && Sol1)
+		{
+			std::cout << "Generate #" << n1->time_generated
+				<< " with cost " << n1->g_val
+				<< " and " << n1->num_of_collisions << " conflicts " << std::endl;
+		}
+		if (!Sol1)
+		{
+			delete (n1);
+			n1 = nullptr;
+		}
+		paths = copy;
+		Sol2 = generateChild(n2, curr);
+		if (screen == 3 && Sol2)
+		{
+			std::cout << "Generate #" << n2->time_generated
+				<< " with cost " << n2->g_val
+				<< " and " << n2->num_of_collisions << " conflicts " << std::endl;
+
+		}
+		if (!Sol2)
+		{
+			delete (n2);
+			n2 = nullptr;
+		}
+
+		curr->clear();
+
+		releaseMDDMemory(curr->agent_id);
+
+		if (open_list.size() == 0) 
+		{
+			solution_found = false;
+			std::cout << "No solution!!!" << std::endl;
+			break;
+		}
+		updateFocalList();
+
+	}  // end of while loop
+
+	writeJSON();
+
+	runtime = (std::clock() - start) * 1000.0 / CLOCKS_PER_SEC;
+	if (solution_found && !validateSolution())
+	{
+		std::cout << "Solution invalid!!!" << std::endl;
+		printPaths();
+		exit(-1);
+	}
+}
+
 void ICBSSearch::releaseMDDMemory(int id)
 {
 	if (id < 0 || mddTable.empty() || (int)mddTable[id].size() < max_num_of_mdds)
@@ -1337,10 +1533,10 @@ void ICBSSearch::releaseMDDMemory(int id)
 ICBSSearch::ICBSSearch(const MapLoader* ml, vector<SingleAgentICBS*>& search_engines, const vector<list<Constraint>>& constraints,
 	vector<vector<PathEntry>>& paths_found_initially, double f_w, int initial_h,
 	heuristics_type h_type, bool PC, bool rectangleReasoning, 
-	int cost_upperbound, double time_limit, int screen):
+	int cost_upperbound, double time_limit, int screen, bool isMain):
 	focal_w(f_w), time_limit(time_limit), h_type(h_type), PC(PC), screen(screen), cost_upperbound(cost_upperbound),
 	rectangleReasoning(rectangleReasoning), ml(ml),
-	search_engines(search_engines), initial_constraints(constraints), paths_found_initially(paths_found_initially)
+	search_engines(search_engines), initial_constraints(constraints), paths_found_initially(paths_found_initially), isMain(isMain)
 {
 	HL_num_expanded = 0;
 	HL_num_generated = 0;
@@ -1385,10 +1581,10 @@ ICBSSearch::ICBSSearch(const MapLoader* ml, vector<SingleAgentICBS*>& search_eng
 
 ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, heuristics_type h_type,
 	bool PC, bool rectangleReasoning,
-	double time_limit, int screen):
+	double time_limit, int screen, bool isMain):
 	focal_w(f_w), time_limit(time_limit), h_type(h_type), PC(PC), screen(screen),
 	rectangleReasoning(rectangleReasoning), ml(&ml),
-	num_of_agents(al.num_of_agents)
+	num_of_agents(al.num_of_agents), isMain(isMain)
 {
 	initial_constraints.resize(num_of_agents);
 
@@ -1465,6 +1661,62 @@ ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 
 	if (rectangleReasoning || h_type == heuristics_type::DG || h_type == heuristics_type::WDG)
 		mddTable.resize(num_of_agents);
+}
+
+void ICBSSearch::recordGoalNode(const ICBSNode* node)
+{
+	if(!validateSolution())
+	{
+		std::cout << "Invalid solution!!!" << std::endl;
+		exit(-1);
+	}
+
+	try
+	{
+		levelGoalCounts.at(node->depth) += 1;
+	}
+	catch(const std::out_of_range& oor)
+	{
+		levelGoalCounts.push_back(1);
+	}
+
+	recordRegularNode(node);	// Also count the node for total nodes in a level
+	
+}
+
+void ICBSSearch::recordRegularNode(const ICBSNode* node)
+{
+	try
+	{
+		levelNodeCounts.at(node->depth) += 1;
+	}
+	catch(const std::out_of_range& oor)
+	{
+		levelNodeCounts.push_back(1);
+	}
+
+	// Match size of goal node list to regualr node list, prevents goal nodes from expanding list at the wrong depth
+	if(levelNodeCounts.size() > levelGoalCounts.size())
+	{
+		levelGoalCounts.push_back(0);
+	}
+}
+
+void ICBSSearch::writeJSON()
+{
+	json jsonToWrite;
+
+	jsonToWrite["levelGoals"] = levelGoalCounts;
+	jsonToWrite["levelCounts"] = levelNodeCounts;
+
+	std::ofstream outfile;
+
+	outfile.open("CTStats.json");
+	
+	outfile << jsonToWrite;
+
+	outfile.close();
+
 }
 
 inline void ICBSSearch::releaseClosedListNodes() 

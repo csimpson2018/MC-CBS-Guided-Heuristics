@@ -77,7 +77,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	ICBSSearch icbs(ml, al, 1.0, h, vm["PC"].as<bool>(), vm["rectangleReasoning"].as<bool>(), 
-		vm["cutoffTime"].as<int>() * 1000, vm["screen"].as<int>());
+		vm["cutoffTime"].as<int>() * 1000, vm["screen"].as<int>(), true);
 	if (vm.count("MaxMDDs"))
 		icbs.max_num_of_mdds = vm["MaxMDDs"].as<int>();
 	bool res;

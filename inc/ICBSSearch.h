@@ -49,18 +49,24 @@ public:
 	// Runs the algorithm until the problem is solved or time is exhausted 
 	bool runICBSSearch();
 
+	// Runs CBS algorithm, searches entire tree and documents every node for stat tracking
+	void getCTStats();
+
 	ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 		heuristics_type h_type, bool PC, bool rectangleReasoning,
-		double time_limit, int screen);
+		double time_limit, int screen, bool isMain);
 	ICBSSearch(const MapLoader* ml, vector<SingleAgentICBS*>& search_engines, const vector<list<Constraint>>& constraints,
 		vector<vector<PathEntry>>& paths_found_initially, double f_w, int initial_h, 
-		heuristics_type h_type, bool PC, bool rectangleReasoning, int cost_upperbound, double time_limit, int screen);
+		heuristics_type h_type, bool PC, bool rectangleReasoning, int cost_upperbound, double time_limit, int screen, bool isMain);
 	void clearSearchEngines();
 	~ICBSSearch();
 
 	// Save results
 	void saveResults(const std::string &fileName, const std::string &instanceName) const;
 	void saveLogs(const std::string &fileName) const;
+
+	void recordGoalNode(const ICBSNode* node);
+	void recordRegularNode(const ICBSNode* node);
 
 private:
 
@@ -76,6 +82,7 @@ private:
 	int bookingHitTimes = 0;
 	double bookingSearchtime = 0;
 
+	bool isMain; // Whether to check CT stats or run heuristics
 	bool PC; // prioritize conflicts or not
 	bool rectangleReasoning = false; // using rectangle reasoning
 
@@ -105,6 +112,9 @@ private:
 	vector<vector<PathEntry>> paths_found_initially;  // contain initial paths found
 	vector<MDD*> mdds_initially;  // contain initial paths found
 	vector < SingleAgentICBS* > search_engines;  // used to find (single) agents' paths and mdd
+
+	vector<int> levelGoalCounts;	// Tracks the amount of goal nodes in a CT level
+	vector<int> levelNodeCounts;		// Tracks the amount of nodes in a CT level
 
 
 	// high level search
@@ -144,6 +154,8 @@ private:
 	void printStrategy() const;
 	void printResults() const;
 	void printConflicts(const ICBSNode &curr) const;
+
+	void writeJSON(); // Write all current stats to a JSON file
 	
 	bool validateSolution() const;
 };
