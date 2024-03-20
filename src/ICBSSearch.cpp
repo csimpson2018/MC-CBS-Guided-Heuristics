@@ -1704,6 +1704,12 @@ void ICBSSearch::recordRegularNode(const ICBSNode* node)
 	}
 
 	cost_level_count_map[node->g_val] += 1;
+
+	// If no corresponding level exists in goal_count_map, make one
+	if(cost_goal_count_map.count(node->g_val) == 0)
+	{
+		cost_goal_count_map[node->g_val] = 0;
+	}
 }
 
 void ICBSSearch::writeJSON()
