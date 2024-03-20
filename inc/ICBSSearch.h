@@ -5,6 +5,7 @@
 #include "compute_heuristic.h"
 #include "agents_loader.h"
 #include <ctime>
+#include <unordered_map>
 #include "HTable.h"
 #include "MDD.h"
 
@@ -115,6 +116,9 @@ private:
 
 	vector<int> levelGoalCounts;	// Tracks the amount of goal nodes in a CT level
 	vector<int> levelNodeCounts;		// Tracks the amount of nodes in a CT level
+
+	std::unordered_map<int, int> cost_goal_count_map;
+	std::unordered_map<int, int> cost_level_count_map;
 
 
 	// high level search

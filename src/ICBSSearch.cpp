@@ -1680,6 +1680,8 @@ void ICBSSearch::recordGoalNode(const ICBSNode* node)
 		levelGoalCounts.push_back(1);
 	}
 
+	cost_goal_count_map[node->g_val] += 1;
+
 	recordRegularNode(node);	// Also count the node for total nodes in a level
 	
 }
@@ -1695,11 +1697,13 @@ void ICBSSearch::recordRegularNode(const ICBSNode* node)
 		levelNodeCounts.push_back(1);
 	}
 
-	// Match size of goal node list to regualr node list, prevents goal nodes from expanding list at the wrong depth
+	// Match size of goal node list to regular node list, prevents goal nodes from expanding list at the wrong depth
 	if(levelNodeCounts.size() > levelGoalCounts.size())
 	{
 		levelGoalCounts.push_back(0);
 	}
+
+	cost_level_count_map[node->g_val] += 1;
 }
 
 void ICBSSearch::writeJSON()
@@ -1708,6 +1712,9 @@ void ICBSSearch::writeJSON()
 
 	jsonToWrite["levelGoals"] = levelGoalCounts;
 	jsonToWrite["levelCounts"] = levelNodeCounts;
+
+	jsonToWrite["costCounts"] = cost_level_count_map;
+	jsonToWrite["costGoals"] = cost_goal_count_map;
 
 	std::ofstream outfile;
 
