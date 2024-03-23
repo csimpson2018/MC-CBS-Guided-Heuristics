@@ -6,6 +6,8 @@
 #include "agents_loader.h"
 #include <ctime>
 #include <unordered_map>
+#include <map>
+#include <utility>
 #include "HTable.h"
 #include "MDD.h"
 
@@ -69,6 +71,8 @@ public:
 	void recordGoalNode(const ICBSNode* node);
 	void recordRegularNode(const ICBSNode* node);
 
+	void recordGoalSubtree(const ICBSNode* node);
+
 private:
 
 	typedef boost::heap::fibonacci_heap< ICBSNode*, boost::heap::compare<ICBSNode::compare_node> > heap_open_t;
@@ -107,7 +111,7 @@ private:
 	std::clock_t start;
 
 	int num_of_agents;
-
+	int num_nodes_generated;
 
 	vector<vector<PathEntry>*> paths;
 	vector<vector<PathEntry>> paths_found_initially;  // contain initial paths found
@@ -119,6 +123,9 @@ private:
 
 	std::unordered_map<int, int> cost_goal_count_map;
 	std::unordered_map<int, int> cost_level_count_map;
+
+	// Maps a node's ID to a pair of: <Parent ID, depth, goals in subtree>
+	std::map<unsigned int, std::tuple< unsigned int, size_t, unsigned int> > subtree_count_map;
 
 
 	// high level search

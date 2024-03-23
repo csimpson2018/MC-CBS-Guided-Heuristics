@@ -863,6 +863,9 @@ bool ICBSSearch::generateChild(ICBSNode*  node, ICBSNode* parent)
 	node->g_val = parent->g_val;
 	node->makespan = parent->makespan;
 	node->depth = parent->depth + 1;
+	node->node_id = num_nodes_generated;
+
+	num_nodes_generated++;
 
 	std::clock_t t1;
 
@@ -1492,6 +1495,7 @@ void ICBSSearch::getCTStats()
 
 	}  // end of while loop
 
+	std::cout << "Focal list empty. Done!" << std::endl;
 	writeJSON();
 
 	runtime = (std::clock() - start) * 1000.0 / CLOCKS_PER_SEC;
@@ -1544,6 +1548,7 @@ ICBSSearch::ICBSSearch(const MapLoader* ml, vector<SingleAgentICBS*>& search_eng
 	LL_num_generated = 0;
 	
 	num_of_agents = search_engines.size();
+	num_nodes_generated = 0;
 
 	solution_found = false;
 	solution_cost = -2;
@@ -1599,9 +1604,13 @@ ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 		ch.getHVals(search_engines[i]->my_heuristic);
 	}
 
+	num_nodes_generated = 1;
+
 	dummy_start = new ICBSNode();
 	dummy_start->agent_id = -1;
+	dummy_start->node_id = 0;
 	
+	subtree_count_map.emplace(dummy_start->node_id, std::make_tuple(0, 0, 0));
 	
 	// initialize paths_found_initially
 	paths.resize(num_of_agents, nullptr);
@@ -1683,6 +1692,8 @@ void ICBSSearch::recordGoalNode(const ICBSNode* node)
 	cost_goal_count_map[node->g_val] += 1;
 
 	recordRegularNode(node);	// Also count the node for total nodes in a level
+
+	//recordGoalSubtree(node);
 	
 }
 
@@ -1712,6 +1723,27 @@ void ICBSSearch::recordRegularNode(const ICBSNode* node)
 	}
 }
 
+void ICBSSearch::recordGoalSubtree(const ICBSNode* node)
+{
+
+	ICBSNode* curr_node = node->parent;
+
+	while(curr_node != nullptr)
+	{
+
+		if(subtree_count_map.count(curr_node->node_id) == 0)
+		{
+			subtree_count_map.emplace(curr_node->node_id, std::make_tuple(curr_node->parent->node_id, curr_node->depth, 0));
+		}
+
+
+		std::get<2>(subtree_count_map[curr_node->node_id]) += 1;
+		curr_node = curr_node->parent;
+	}
+
+
+}
+
 void ICBSSearch::writeJSON()
 {
 	json jsonToWrite;
@@ -1721,6 +1753,8 @@ void ICBSSearch::writeJSON()
 
 	jsonToWrite["costCounts"] = cost_level_count_map;
 	jsonToWrite["costGoals"] = cost_goal_count_map;
+
+	//sjsonToWrite["subtreeCount"] = subtree_count_map;
 
 	std::ofstream outfile;
 

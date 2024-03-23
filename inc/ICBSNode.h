@@ -61,6 +61,8 @@ public:
 	boost::unordered_map<int, int> conflictGraph; //<edge index, weight>
 	ICBSNode* parent;
 
+	unsigned int node_id; // Enforces ordering for the nodes when tracking CT Stats for subtrees
+
 	int agent_id;
 	std::vector<PathEntry> path; // path of agent_id
 	std::list<Constraint> constraints; // constraints imposed to agent_id
