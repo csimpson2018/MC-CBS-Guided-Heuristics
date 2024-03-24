@@ -1693,7 +1693,7 @@ void ICBSSearch::recordGoalNode(const ICBSNode* node)
 
 	recordRegularNode(node);	// Also count the node for total nodes in a level
 
-	//recordGoalSubtree(node);
+	recordGoalSubtree(node);
 	
 }
 
@@ -1754,7 +1754,7 @@ void ICBSSearch::writeJSON()
 	jsonToWrite["costCounts"] = cost_level_count_map;
 	jsonToWrite["costGoals"] = cost_goal_count_map;
 
-	//sjsonToWrite["subtreeCount"] = subtree_count_map;
+	jsonToWrite["subtreeCount"] = subtree_count_map;
 
 	std::ofstream outfile;
 
