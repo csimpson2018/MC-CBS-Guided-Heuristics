@@ -1331,16 +1331,25 @@ void ICBSSearch::getCTStats()
 	// start is already in the open_list
 	int curr_depth = 0;
 
+	unsigned int iter_count = 0;
+
 	while (!focal_list.empty()) 
 	{
 		ICBSNode* curr = focal_list.top();
 		focal_list.pop();
 		open_list.erase(curr->open_handle);
 
+		iter_count++;
+
 		if(curr->depth > curr_depth)
 		{
 			writeJSON();
 			curr_depth = curr->depth;
+		}
+		else if(iter_count == 9999)
+		{
+			writeJSON();
+			iter_count = 0;
 		}
 
 		// takes the paths_found_initially and UPDATE all constrained paths found for agents from curr to dummy_start (and lower-bounds)
