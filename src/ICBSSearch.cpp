@@ -1111,7 +1111,12 @@ bool ICBSSearch::runICBSSearch()
 {
 	if(isMain == true)
 	{
-		getCTStats();
+		for(int i = 0; i < num_searches; i++)
+		{
+			getCTStats();
+			resetSearch();
+		}
+		
 	}
 
 	if (screen > 0) // 1 or 2
@@ -1333,6 +1338,8 @@ void ICBSSearch::getCTStats()
 
 	unsigned int iter_count = 0;
 
+	std::uniform_real_distribution<double> dist(0.0, 1.0);
+
 	while (!focal_list.empty()) 
 	{
 		ICBSNode* curr = focal_list.top();
@@ -1463,31 +1470,49 @@ void ICBSSearch::getCTStats()
 
 		bool Sol1 = false, Sol2 = false;
 		vector<vector<PathEntry>*> copy(paths);
-		Sol1 = generateChild(n1, curr);
-		if (screen == 3 && Sol1)
-		{
-			std::cout << "Generate #" << n1->time_generated
-				<< " with cost " << n1->g_val
-				<< " and " << n1->num_of_collisions << " conflicts " << std::endl;
-		}
-		if (!Sol1)
-		{
-			delete (n1);
-			n1 = nullptr;
-		}
-		paths = copy;
-		Sol2 = generateChild(n2, curr);
-		if (screen == 3 && Sol2)
-		{
-			std::cout << "Generate #" << n2->time_generated
-				<< " with cost " << n2->g_val
-				<< " and " << n2->num_of_collisions << " conflicts " << std::endl;
 
-		}
-		if (!Sol2)
+		double chance = dist(generator);
+
+		if(chance < .5)
 		{
-			delete (n2);
-			n2 = nullptr;
+			
+			Sol1 = generateChild(n1, curr);
+			if (screen == 3 && Sol1)
+			{
+				std::cout << "Generate #" << n1->time_generated
+					<< " with cost " << n1->g_val
+					<< " and " << n1->num_of_collisions << " conflicts " << std::endl;
+			}
+			if (!Sol1)
+			{
+				delete (n1);
+				n1 = nullptr;
+			}
+			
+		}
+		else 
+		{
+
+			Sol2 = generateChild(n2, curr);
+			if (screen == 3 && Sol2)
+			{
+				std::cout << "Generate #" << n2->time_generated
+					<< " with cost " << n2->g_val
+					<< " and " << n2->num_of_collisions << " conflicts " << std::endl;
+
+			}
+			if (!Sol2)
+			{
+				delete (n2);
+				n2 = nullptr;
+			}
+		}
+		
+		paths = copy;
+
+		if(!Sol1 && !Sol2)
+		{
+			recordDeadNode(curr);
 		}
 
 		curr->clear();
@@ -1595,10 +1620,10 @@ ICBSSearch::ICBSSearch(const MapLoader* ml, vector<SingleAgentICBS*>& search_eng
 
 ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, heuristics_type h_type,
 	bool PC, bool rectangleReasoning,
-	double time_limit, int screen, bool isMain):
+	double time_limit, int screen, bool isMain, int num_searches):
 	focal_w(f_w), time_limit(time_limit), h_type(h_type), PC(PC), screen(screen),
 	rectangleReasoning(rectangleReasoning), ml(&ml),
-	num_of_agents(al.num_of_agents), isMain(isMain)
+	num_of_agents(al.num_of_agents), isMain(isMain), al(&al), num_searches(num_searches)
 {
 	initial_constraints.resize(num_of_agents);
 
@@ -1613,7 +1638,12 @@ ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 		ch.getHVals(search_engines[i]->my_heuristic);
 	}
 
+	num_searches = num_searches;
+
 	num_nodes_generated = 1;
+
+	std::random_device rng;
+	generator.seed(rng());
 
 	dummy_start = new ICBSNode();
 	dummy_start->agent_id = -1;
@@ -1681,6 +1711,86 @@ ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 		mddTable.resize(num_of_agents);
 }
 
+void ICBSSearch::resetSearch()
+{
+	allNodes_table.clear();
+
+	num_nodes_generated = 1;
+
+	initial_constraints.resize(num_of_agents);
+
+	search_engines = vector < SingleAgentICBS* >(num_of_agents);
+	for (int i = 0; i < num_of_agents; i++) 
+	{
+		int init_loc = ml->linearize_coordinate((al->initial_locations[i]).first, (al->initial_locations[i]).second);
+		int goal_loc = ml->linearize_coordinate((al->goal_locations[i]).first, (al->goal_locations[i]).second);
+		ComputeHeuristic ch(init_loc, goal_loc, ml->get_map(), ml->rows, ml->cols, ml->get_moves_offset());
+		search_engines[i] = new SingleAgentICBS(init_loc, goal_loc, ml->get_map(), ml->rows*ml->cols,
+			ml->get_moves_offset(), ml->cols);
+		ch.getHVals(search_engines[i]->my_heuristic);
+	}
+
+	dummy_start = new ICBSNode();
+	dummy_start->agent_id = -1;
+	dummy_start->node_id = 0;
+	
+	subtree_count_map.emplace(dummy_start->node_id, std::make_tuple(0, 0, 0));
+	
+	// initialize paths_found_initially
+	paths.resize(num_of_agents, nullptr);
+	paths_found_initially.resize(num_of_agents);
+	vector < list< pair<int, int> > > cons_vec;
+	for (int i = 0; i < num_of_agents; i++) 
+	{
+		CAT cat(dummy_start->makespan + 1);  // initialized to false
+		updateReservationTable(cat, i, *dummy_start);
+
+		if (search_engines[i]->findPath(paths_found_initially[i], cons_vec, cat, 0) == false)
+			cout << "NO SOLUTION EXISTS";
+
+		paths[i] = &paths_found_initially[i];
+		dummy_start->makespan = max(dummy_start->makespan, paths_found_initially[i].size() - 1);
+
+		LL_num_expanded += search_engines[i]->num_expanded;
+		LL_num_generated += search_engines[i]->num_generated;
+	}
+
+
+
+	// generate dummy start and update data structures	
+	dummy_start->g_val = 0;
+	for (int i = 0; i < num_of_agents; i++)
+		dummy_start->g_val += paths[i]->size() - 1;
+	dummy_start->h_val = 0;
+	dummy_start->f_val = dummy_start->g_val;
+
+	dummy_start->depth = 0;
+	
+	dummy_start->open_handle = open_list.push(dummy_start);
+	dummy_start->focal_handle = focal_list.push(dummy_start);
+
+	HL_num_generated++;
+	dummy_start->time_generated = HL_num_generated;
+	allNodes_table.push_back(dummy_start);
+	findConflicts(*dummy_start);
+
+	min_f_val = dummy_start->f_val;
+	focal_list_threshold = min_f_val * focal_w;
+	//if (h_type == heuristics_type::DG || h_type == heuristics_type::PAIR)
+	//	dummy_start->conflictGraph.resize(num_of_agents * num_of_agents, -1);
+	/*if (h_type == heuristics_type::DG && !EPEA4PAIR)
+		mdds_initially.resize(num_of_agents);*/
+
+	hTable.resize(num_of_agents);
+	for (int i = 0; i < num_of_agents; i++)
+	{
+		hTable[i].resize(num_of_agents);
+	}
+
+	if (rectangleReasoning || h_type == heuristics_type::DG || h_type == heuristics_type::WDG)
+		mddTable.resize(num_of_agents);
+}
+
 void ICBSSearch::recordGoalNode(const ICBSNode* node)
 {
 	if(!validateSolution())
@@ -1702,7 +1812,22 @@ void ICBSSearch::recordGoalNode(const ICBSNode* node)
 
 	recordRegularNode(node);	// Also count the node for total nodes in a level
 
-	recordGoalSubtree(node);
+	//recordGoalSubtree(node);
+	
+}
+
+void ICBSSearch::recordDeadNode(const ICBSNode* node)
+{
+	try
+	{
+		levelGoalCounts.at(node->depth) += 1;
+	}
+	catch(const std::out_of_range& oor)
+	{
+		levelGoalCounts.push_back(1);
+	}
+
+	cost_dead_count_map[node->g_val] += 1;
 	
 }
 
@@ -1723,12 +1848,24 @@ void ICBSSearch::recordRegularNode(const ICBSNode* node)
 		levelGoalCounts.push_back(0);
 	}
 
+	// Match size of dead node list to regular node list, prevents dead nodes from expanding list at the wrong depth
+	if(levelNodeCounts.size() > levelDeadCounts.size())
+	{
+		levelDeadCounts.push_back(0);
+	}
+
 	cost_level_count_map[node->g_val] += 1;
 
 	// If no corresponding level exists in goal_count_map, make one
 	if(cost_goal_count_map.count(node->g_val) == 0)
 	{
 		cost_goal_count_map[node->g_val] = 0;
+	}
+
+	// If no corresponding level exists in dead_count_map, make one
+	if(cost_dead_count_map.count(node->g_val) == 0)
+	{
+		cost_dead_count_map[node->g_val] = 0;
 	}
 }
 
@@ -1758,6 +1895,7 @@ void ICBSSearch::writeJSON()
 	json jsonToWrite;
 
 	jsonToWrite["levelGoals"] = levelGoalCounts;
+	jsonToWrite["levelDeads"] = levelDeadCounts;
 	jsonToWrite["levelCounts"] = levelNodeCounts;
 
 	jsonToWrite["costCounts"] = cost_level_count_map;

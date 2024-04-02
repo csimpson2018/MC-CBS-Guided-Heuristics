@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <map>
 #include <utility>
+#include <random>
 #include "HTable.h"
 #include "MDD.h"
 
@@ -57,7 +58,7 @@ public:
 
 	ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 		heuristics_type h_type, bool PC, bool rectangleReasoning,
-		double time_limit, int screen, bool isMain);
+		double time_limit, int screen, bool isMain, int num_searches);
 	ICBSSearch(const MapLoader* ml, vector<SingleAgentICBS*>& search_engines, const vector<list<Constraint>>& constraints,
 		vector<vector<PathEntry>>& paths_found_initially, double f_w, int initial_h, 
 		heuristics_type h_type, bool PC, bool rectangleReasoning, int cost_upperbound, double time_limit, int screen, bool isMain);
@@ -69,6 +70,7 @@ public:
 	void saveLogs(const std::string &fileName) const;
 
 	void recordGoalNode(const ICBSNode* node);
+	void recordDeadNode(const ICBSNode* node);
 	void recordRegularNode(const ICBSNode* node);
 
 	void recordGoalSubtree(const ICBSNode* node);
@@ -108,8 +110,10 @@ private:
 
 	vector<list<Constraint>> initial_constraints;
 	const MapLoader* ml;
+	const AgentsLoader* al;
 	std::clock_t start;
 
+	int num_searches;
 	int num_of_agents;
 	int num_nodes_generated;
 
@@ -118,10 +122,14 @@ private:
 	vector<MDD*> mdds_initially;  // contain initial paths found
 	vector < SingleAgentICBS* > search_engines;  // used to find (single) agents' paths and mdd
 
+	std::mt19937 generator;
+
+	vector<int> levelDeadCounts;	// Tracks the amount of dead ends in a CT level
 	vector<int> levelGoalCounts;	// Tracks the amount of goal nodes in a CT level
-	vector<int> levelNodeCounts;		// Tracks the amount of nodes in a CT level
+	vector<int> levelNodeCounts;	// Tracks the amount of nodes in a CT level
 
 	std::unordered_map<int, int> cost_goal_count_map;
+	std::unordered_map<int, int> cost_dead_count_map;
 	std::unordered_map<int, int> cost_level_count_map;
 
 	// Maps a node's ID to a pair of: <Parent ID, depth, goals in subtree>
@@ -165,6 +173,8 @@ private:
 	void printStrategy() const;
 	void printResults() const;
 	void printConflicts(const ICBSNode &curr) const;
+
+	void resetSearch();	// Resets ICBS Search states to do another rollout
 
 	void writeJSON(); // Write all current stats to a JSON file
 	
