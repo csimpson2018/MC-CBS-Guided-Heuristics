@@ -58,7 +58,7 @@ public:
 
 	ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 		heuristics_type h_type, bool PC, bool rectangleReasoning,
-		double time_limit, int screen, bool isMain, int num_searches);
+		double time_limit, int screen, bool isMain, std::string jsonName);
 	ICBSSearch(const MapLoader* ml, vector<SingleAgentICBS*>& search_engines, const vector<list<Constraint>>& constraints,
 		vector<vector<PathEntry>>& paths_found_initially, double f_w, int initial_h, 
 		heuristics_type h_type, bool PC, bool rectangleReasoning, int cost_upperbound, double time_limit, int screen, bool isMain);
@@ -112,8 +112,7 @@ private:
 	const MapLoader* ml;
 	const AgentsLoader* al;
 	std::clock_t start;
-
-	int num_searches;
+	
 	int num_of_agents;
 	int num_nodes_generated;
 
@@ -131,6 +130,8 @@ private:
 	std::unordered_map<int, int> cost_goal_count_map;
 	std::unordered_map<int, int> cost_dead_count_map;
 	std::unordered_map<int, int> cost_level_count_map;
+
+	std::string json_file_name;
 
 	// Maps a node's ID to a pair of: <Parent ID, depth, goals in subtree>
 	std::map<unsigned int, std::tuple< unsigned int, size_t, unsigned int> > subtree_count_map;

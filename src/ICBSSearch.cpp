@@ -5,6 +5,7 @@
 #include "RectangleReasoning.h"
 
 #include <nlohmann/json.hpp>
+#include <boost/filesystem.hpp>
 
 using json = nlohmann::json;
 
@@ -1111,12 +1112,7 @@ bool ICBSSearch::runICBSSearch()
 {
 	if(isMain == true)
 	{
-		for(int i = 0; i < num_searches; i++)
-		{
-			getCTStats();
-			resetSearch();
-		}
-		
+		getCTStats();	
 	}
 
 	if (screen > 0) // 1 or 2
@@ -1345,19 +1341,6 @@ void ICBSSearch::getCTStats()
 		ICBSNode* curr = focal_list.top();
 		focal_list.pop();
 		open_list.erase(curr->open_handle);
-
-		iter_count++;
-
-		if(curr->depth > curr_depth)
-		{
-			writeJSON();
-			curr_depth = curr->depth;
-		}
-		else if(iter_count == 9999)
-		{
-			writeJSON();
-			iter_count = 0;
-		}
 
 		// takes the paths_found_initially and UPDATE all constrained paths found for agents from curr to dummy_start (and lower-bounds)
 		t1 = std::clock();
@@ -1620,10 +1603,10 @@ ICBSSearch::ICBSSearch(const MapLoader* ml, vector<SingleAgentICBS*>& search_eng
 
 ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, heuristics_type h_type,
 	bool PC, bool rectangleReasoning,
-	double time_limit, int screen, bool isMain, int num_searches):
+	double time_limit, int screen, bool isMain, std::string jsonName):
 	focal_w(f_w), time_limit(time_limit), h_type(h_type), PC(PC), screen(screen),
 	rectangleReasoning(rectangleReasoning), ml(&ml),
-	num_of_agents(al.num_of_agents), isMain(isMain), al(&al), num_searches(num_searches)
+	num_of_agents(al.num_of_agents), isMain(isMain), al(&al)
 {
 	initial_constraints.resize(num_of_agents);
 
@@ -1638,9 +1621,9 @@ ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 		ch.getHVals(search_engines[i]->my_heuristic);
 	}
 
-	num_searches = num_searches;
-
 	num_nodes_generated = 1;
+
+	json_file_name = jsonName;
 
 	std::random_device rng;
 	generator.seed(rng());
@@ -1649,7 +1632,7 @@ ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 	dummy_start->agent_id = -1;
 	dummy_start->node_id = 0;
 	
-	subtree_count_map.emplace(dummy_start->node_id, std::make_tuple(0, 0, 0));
+	// subtree_count_map.emplace(dummy_start->node_id, std::make_tuple(0, 0, 0));
 	
 	// initialize paths_found_initially
 	paths.resize(num_of_agents, nullptr);
@@ -1711,85 +1694,6 @@ ICBSSearch::ICBSSearch(const MapLoader& ml, const AgentsLoader& al, double f_w, 
 		mddTable.resize(num_of_agents);
 }
 
-void ICBSSearch::resetSearch()
-{
-	allNodes_table.clear();
-
-	num_nodes_generated = 1;
-
-	initial_constraints.resize(num_of_agents);
-
-	search_engines = vector < SingleAgentICBS* >(num_of_agents);
-	for (int i = 0; i < num_of_agents; i++) 
-	{
-		int init_loc = ml->linearize_coordinate((al->initial_locations[i]).first, (al->initial_locations[i]).second);
-		int goal_loc = ml->linearize_coordinate((al->goal_locations[i]).first, (al->goal_locations[i]).second);
-		ComputeHeuristic ch(init_loc, goal_loc, ml->get_map(), ml->rows, ml->cols, ml->get_moves_offset());
-		search_engines[i] = new SingleAgentICBS(init_loc, goal_loc, ml->get_map(), ml->rows*ml->cols,
-			ml->get_moves_offset(), ml->cols);
-		ch.getHVals(search_engines[i]->my_heuristic);
-	}
-
-	dummy_start = new ICBSNode();
-	dummy_start->agent_id = -1;
-	dummy_start->node_id = 0;
-	
-	subtree_count_map.emplace(dummy_start->node_id, std::make_tuple(0, 0, 0));
-	
-	// initialize paths_found_initially
-	paths.resize(num_of_agents, nullptr);
-	paths_found_initially.resize(num_of_agents);
-	vector < list< pair<int, int> > > cons_vec;
-	for (int i = 0; i < num_of_agents; i++) 
-	{
-		CAT cat(dummy_start->makespan + 1);  // initialized to false
-		updateReservationTable(cat, i, *dummy_start);
-
-		if (search_engines[i]->findPath(paths_found_initially[i], cons_vec, cat, 0) == false)
-			cout << "NO SOLUTION EXISTS";
-
-		paths[i] = &paths_found_initially[i];
-		dummy_start->makespan = max(dummy_start->makespan, paths_found_initially[i].size() - 1);
-
-		LL_num_expanded += search_engines[i]->num_expanded;
-		LL_num_generated += search_engines[i]->num_generated;
-	}
-
-
-
-	// generate dummy start and update data structures	
-	dummy_start->g_val = 0;
-	for (int i = 0; i < num_of_agents; i++)
-		dummy_start->g_val += paths[i]->size() - 1;
-	dummy_start->h_val = 0;
-	dummy_start->f_val = dummy_start->g_val;
-
-	dummy_start->depth = 0;
-	
-	dummy_start->open_handle = open_list.push(dummy_start);
-	dummy_start->focal_handle = focal_list.push(dummy_start);
-
-	HL_num_generated++;
-	dummy_start->time_generated = HL_num_generated;
-	allNodes_table.push_back(dummy_start);
-	findConflicts(*dummy_start);
-
-	min_f_val = dummy_start->f_val;
-	focal_list_threshold = min_f_val * focal_w;
-	//if (h_type == heuristics_type::DG || h_type == heuristics_type::PAIR)
-	//	dummy_start->conflictGraph.resize(num_of_agents * num_of_agents, -1);
-	/*if (h_type == heuristics_type::DG && !EPEA4PAIR)
-		mdds_initially.resize(num_of_agents);*/
-
-	hTable.resize(num_of_agents);
-	for (int i = 0; i < num_of_agents; i++)
-	{
-		hTable[i].resize(num_of_agents);
-	}
-
-	if (rectangleReasoning || h_type == heuristics_type::DG || h_type == heuristics_type::WDG)
-		mddTable.resize(num_of_agents);
-}
 
 void ICBSSearch::recordGoalNode(const ICBSNode* node)
 {
@@ -1894,6 +1798,81 @@ void ICBSSearch::writeJSON()
 {
 	json jsonToWrite;
 
+	if(boost::filesystem::exists(json_file_name))
+	{
+		std::cout << "File exists! Writing to existing file..." << std::endl;
+
+		std::ifstream inJSONStream(json_file_name);
+		jsonToWrite = json::parse(inJSONStream);
+
+
+		std::vector<int> json_levelGoalCounts = jsonToWrite["levelGoals"].get<std::vector<int>>();
+		std::vector<int> json_levelDeadCounts = jsonToWrite["levelDeads"].get<std::vector<int>>();
+		std::vector<int> json_levelNodeCounts = jsonToWrite["levelCounts"].get<std::vector<int>>();
+
+		std::unordered_map<int, int> json_cost_level_count_map = jsonToWrite["costCounts"].get<std::unordered_map<int, int>>();
+		std::unordered_map<int, int> json_cost_goal_count_map = jsonToWrite["costGoals"].get<std::unordered_map<int, int>>();
+
+		if(json_levelGoalCounts.size() > levelGoalCounts.size())
+		{
+			levelGoalCounts.resize(json_levelGoalCounts.size(), 0);
+		}
+
+		if(json_levelDeadCounts.size() > levelDeadCounts.size())
+		{
+			levelDeadCounts.resize(json_levelDeadCounts.size(), 0);
+		}
+
+		if(json_levelNodeCounts.size() > levelNodeCounts.size())
+		{
+			levelNodeCounts.resize(json_levelNodeCounts.size(), 0);
+		}
+
+
+		for(int i = 0; i < json_levelGoalCounts.size(); i++)
+		{
+			levelGoalCounts.at(i) += json_levelGoalCounts.at(i);
+		}
+
+		for(int i = 0; i < json_levelDeadCounts.size(); i++)
+		{
+			levelDeadCounts.at(i) += json_levelDeadCounts.at(i);
+		}
+
+		for(int i = 0; i < json_levelNodeCounts.size(); i++)
+		{
+			levelNodeCounts.at(i) += json_levelNodeCounts.at(i);
+		}
+
+		for(auto map_item : json_cost_goal_count_map)
+		{
+
+			try
+			{
+				cost_goal_count_map.at(map_item.first) += map_item.second;
+			}
+			catch(const std::out_of_range& oor)
+			{
+				cost_goal_count_map[map_item.first] = map_item.second;
+			}
+		
+		}
+
+		for(auto map_item : json_cost_level_count_map)
+		{
+
+			try
+			{
+				cost_level_count_map.at(map_item.first) += map_item.second;
+			}
+			catch(const std::out_of_range& oor)
+			{
+				cost_level_count_map[map_item.first] = map_item.second;
+			}
+		
+		}
+	}
+
 	jsonToWrite["levelGoals"] = levelGoalCounts;
 	jsonToWrite["levelDeads"] = levelDeadCounts;
 	jsonToWrite["levelCounts"] = levelNodeCounts;
@@ -1901,11 +1880,9 @@ void ICBSSearch::writeJSON()
 	jsonToWrite["costCounts"] = cost_level_count_map;
 	jsonToWrite["costGoals"] = cost_goal_count_map;
 
-	jsonToWrite["subtreeCount"] = subtree_count_map;
-
 	std::ofstream outfile;
 
-	outfile.open("CTStats.json");
+	outfile.open(json_file_name);
 	
 	outfile << jsonToWrite;
 

@@ -40,7 +40,7 @@ int main(int argc, char** argv)
 		("rectangleReasoning,r", po::value<bool>()->default_value(false), "Using rectangle reasoning")
 		("screen,s", po::value<int>()->default_value(0), "screen option (0: none; 1: results; 2:all)")
 		("warehouseWidth,b", po::value<int>()->default_value(0), "width of working stations on both sides, for generating instacnes")
-		("searches", po::value<int>()->default_value(1000), "how many rollouts/searches to do in the CT")
+		("JsonName,j", po::value<std::string>()->default_value("CTStats.json"), "Name of the JSON file to write to (include file extension)")
 	;
 
 	po::variables_map vm;
@@ -78,7 +78,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	ICBSSearch icbs(ml, al, 1.0, h, vm["PC"].as<bool>(), vm["rectangleReasoning"].as<bool>(), 
-		vm["cutoffTime"].as<int>() * 1000, vm["screen"].as<int>(), true, vm["searches"].as<int>());
+		vm["cutoffTime"].as<int>() * 1000, vm["screen"].as<int>(), true, vm["JsonName"].as<std::string>());
 	if (vm.count("MaxMDDs"))
 		icbs.max_num_of_mdds = vm["MaxMDDs"].as<int>();
 	bool res;
