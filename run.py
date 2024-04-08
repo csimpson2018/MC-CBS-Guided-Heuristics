@@ -2,6 +2,7 @@ import os
 import subprocess
 import shutil
 import shlex
+import time
 
 def main():
     exec_filename = getExecutable()
@@ -93,11 +94,7 @@ def runProcessIters(exec_filename, user_args, num_iters):
     
     for iteration in range(num_iters):
 
-        print("Iteration %d of %d" % (iteration + 1, num_iters))
-
         subprocess.run(proc_args, stdout=subprocess.DEVNULL)
-
-    print("Done!")
 
 
 
