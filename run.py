@@ -2,7 +2,16 @@ import os
 import subprocess
 import shutil
 import shlex
-import time
+import random
+import logging
+
+logging.basicConfig(filename="rollouts.log",
+                    filemode='a',
+                    format='%(asctime)s %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
+
+logger = logging.getLogger('RolloutLog')
 
 def main():
     exec_filename = getExecutable()
@@ -88,16 +97,56 @@ def getNumIters():
 
 def runProcessIters(exec_filename, user_args, num_iters):
 
+    rng = random.seed()
+
     proc_args = user_args
 
+    seed_arg_loc = None
+
+    if "-d" in proc_args:
+        seed_arg_loc = proc_args.index("-d") + 1
+    elif "--seed" in proc_args:
+        seed_arg_loc = proc_args.index("--seed") + 1
+    else:
+        proc_args.append("-d")
+        proc_args.append(str(random.randint(0, 2147483647)))
+
+        seed_arg_loc = len(proc_args) - 1
+
+
+    agent_file_loc = None
+    agent_arg_index = None
+
+    try:
+        agent_arg_index = proc_args.index("-a") + 1
+    except ValueError:
+        agent_arg_index = proc_args.index("--agents") + 1
+
+    agent_file_loc = proc_args[agent_arg_index]
+    
+
     proc_args.insert(0, exec_filename)
+
+    process_arg_string = " ".join(proc_args)
+
+    logger.info("Starting process with args: %s" % process_arg_string)
     
     for iteration in range(num_iters):
 
         subprocess.run(proc_args, stdout=subprocess.DEVNULL)
+
+        try:
+            os.remove(agent_file_loc)
+        except OSError:
+            pass
+
+        proc_args[seed_arg_loc] = str(random.randint(0, 2147483647))
 
 
 
 
 if __name__ == '__main__':
     main()
+
+    logger.info("Process completed")
+    
