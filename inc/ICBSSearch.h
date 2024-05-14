@@ -123,6 +123,8 @@ private:
 
 	std::mt19937 generator;
 
+	vector<int> solutionCosts;	// Sequentially tracks the solution costs every CT sample iteration
+
 	vector<int> levelDeadCounts;	// Tracks the amount of dead ends in a CT level
 	vector<int> levelGoalCounts;	// Tracks the amount of goal nodes in a CT level
 	vector<int> levelNodeCounts;	// Tracks the amount of nodes in a CT level

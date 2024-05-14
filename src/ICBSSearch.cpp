@@ -1711,6 +1711,8 @@ void ICBSSearch::recordGoalNode(const ICBSNode* node)
 	{
 		levelGoalCounts.push_back(1);
 	}
+	
+	solutionCosts.push_back(node->f_val);
 
 	cost_goal_count_map[node->g_val] += 1;
 
@@ -1813,6 +1815,12 @@ void ICBSSearch::writeJSON()
 		std::unordered_map<int, int> json_cost_level_count_map = jsonToWrite["costCounts"].get<std::unordered_map<int, int>>();
 		std::unordered_map<int, int> json_cost_goal_count_map = jsonToWrite["costGoals"].get<std::unordered_map<int, int>>();
 
+		std::vector<int> json_solutionCosts = jsonToWrite["solutionCosts"].get<std::vector<int>>();
+
+		json_solutionCosts.push_back(solutionCosts.at(0));
+
+		solutionCosts = json_solutionCosts;
+
 		if(json_levelGoalCounts.size() > levelGoalCounts.size())
 		{
 			levelGoalCounts.resize(json_levelGoalCounts.size(), 0);
@@ -1879,6 +1887,8 @@ void ICBSSearch::writeJSON()
 
 	jsonToWrite["costCounts"] = cost_level_count_map;
 	jsonToWrite["costGoals"] = cost_goal_count_map;
+
+	jsonToWrite["solutionCosts"] = solutionCosts;
 
 	std::ofstream outfile;
 
