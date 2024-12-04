@@ -5,7 +5,7 @@ import logging
 
 
 
-def RunProcess(sample_program, optimal_program, map_file, timeout, num_agents, rectangle, seed, num_iters):
+def RunProcess(sample_program, map_file, timeout, num_agents, rectangle, seed, num_iters, worker_id):
 
     handler = logging.FileHandler("rollouts.log")   
     
@@ -19,7 +19,7 @@ def RunProcess(sample_program, optimal_program, map_file, timeout, num_agents, r
 
     random.seed(seed)
 
-    agent_file = ".".join((str(os.getpid()), "agents"))
+    agent_file = ".".join( (str(worker_id), "agents") )
 
     sample_args = []
 
@@ -34,56 +34,37 @@ def RunProcess(sample_program, optimal_program, map_file, timeout, num_agents, r
     sample_args.append("-t")
     sample_args.append(str(timeout))
 
-    sample_args.append("-r")
+    sample_args.append("--rectangle")
     sample_args.append(str(rectangle))
 
     sample_args.append("-a")
     sample_args.append(agent_file)
 
     sample_args.append("-o")
-    sample_args.append(".".join( ( ( str(os.getpid()) + "_sample"), "csv") ) )
+    sample_args.append(".".join( ( ( str(worker_id) + "_sample"), "csv") ) )
 
     sample_args.append("-j")
-    sample_args.append(".".join( ( ( str(os.getpid()) + "_sample"), "json") ) )
+    sample_args.append(".".join( ( ( str(worker_id) + "_sample"), "json") ) )
 
     sample_args.append("-d")
-    sample_args.append( str(random.randint(0, 2147483647)) )
 
-    optimal_args = []
+    agent_seed = random.randint(0, 2147483647)
 
-    optimal_args.append(optimal_program)
-
-    optimal_args.append("-m")
-    optimal_args.append(map_file)
-
-    optimal_args.append("-k")
-    optimal_args.append(str(num_agents))
-
-    optimal_args.append("-t")
-    optimal_args.append(str(timeout))
-
-    optimal_args.append("-r")
-    optimal_args.append(str(rectangle))
-
-    optimal_args.append("-a")
-    optimal_args.append(agent_file)
-
-    optimal_args.append("-o")
-    optimal_args.append(".".join( ( ( str(os.getpid()) + "_optimal"), "csv") ) )
+    sample_args.append( str(agent_seed))
     
-    for iteration in range(num_iters):
+    for _ in range(num_iters):
 
-        logger.info("PID %d: Starting sample program with args: %s" % (os.getpid(), sample_args))
+        logger.info("Worker ID %d: Starting sample program with args: %s" % (worker_id, sample_args))
+
+        logger.info("Agent seed for worker ID %d is %d" % (worker_id, agent_seed) )
 
         subprocess.run(sample_args, stdout=subprocess.DEVNULL)
 
-        logger.info("Sample PID %d: Iteration completed with args: %s" % (os.getpid(), sample_args))
+        logger.info("Sample Worker ID %d: Iteration completed with args: %s" % (worker_id, sample_args))
 
-        logger.info("Optimal PID %d: Starting optimal program with args: %s" % (os.getpid(), optimal_args))
+        agent_seed = random.randint(0, 2147483647)
 
-        subprocess.run(optimal_args, stdout=subprocess.DEVNULL)
-
-        logger.info("Optimal PID %d: Iteration completed with args: %s" % (os.getpid(), optimal_args))
+        sample_args[-1] = str(agent_seed)
 
         try:
             os.remove(agent_file)

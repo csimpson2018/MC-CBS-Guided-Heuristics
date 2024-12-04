@@ -18,15 +18,16 @@ logger = logging.getLogger('SpawnerLog')
 # Add arguments to arg parser
 parser = ArgumentParser()
 
-parser.add_argument("-s", "--sample", help="Program that will sample a goal node.", required=True, type=str)
-parser.add_argument("-v", "--verify", help="Program that will verify the optimal solution.", required=True, type=str)
 parser.add_argument("-m", "--map", help="REQUIRED. Domain to run the MAPF problems on.", required=True, type=str)
-parser.add_argument("-t", "--timeout", help="How long the program should wait for the optimal solution, in seconds.", type=int)
+parser.add_argument("-s", "--sample", help="REQUIRED. Program that will run a MC rollout.", required=True, type=str)
 parser.add_argument("-k", "--numAgents", help="REQUIRED. Number of agents to use in the MAPF problem.", required=True, type=int)
-parser.add_argument("-r", "--rectangle", help="Whether to use rectangle reasoning or not.", type=int)
-parser.add_argument("-d", "--seed", help="A seed to generate the random agent locations.", type=int)
 parser.add_argument("-p", "--processes", help="REQUIRED. How many processes to use in parallel.", required=True, type=int)
 parser.add_argument("-i", "--iterations", help="REQUIRED. How many iterations each subprocess should attempt.", required=True, type=int)
+
+parser.add_argument("-t", "--timeout", help="How long the program should wait for a solution, in seconds.", type=int)
+parser.add_argument("-r", "--rectangle", help="Whether to use rectangle reasoning or not.", type=int)
+parser.add_argument("-d", "--seed", help="A seed to generate the random agent locations.", type=int)
+
 
 def main():
 
@@ -46,11 +47,9 @@ def SpawnProcesses(process_args):
 
     sample_program = process_args.sample
 
-    optimal_program = process_args.verify
-
     map_file = process_args.map
 
-    timeout = 7200
+    timeout = 600
 
     if process_args.timeout != None:
 
@@ -87,7 +86,7 @@ def SpawnProcesses(process_args):
         
         num_processes = mp.cpu_count() - 1
 
-    p = [mp.Process(target=search.RunProcess, args=(sample_program, optimal_program, map_file, timeout, num_agents, rectangle, random.randint(0, 2147483647), num_iters,)) for p in range(num_processes)]
+    p = [mp.Process(target=search.RunProcess, args=(sample_program, map_file, timeout, num_agents, rectangle, random.randint(0, 2147483647), num_iters, p,)) for p in range(num_processes)]
 
     for proc in p:
         proc.start()

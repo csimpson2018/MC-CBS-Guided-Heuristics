@@ -1,29 +1,63 @@
 #include "common.h"
-#include <iostream>
 
-
-bool validMove(int curr, int next, int map_size, int num_col)
+std::ostream& operator<<(std::ostream& os, const Path& path)
 {
-	if (next < 0 || next >= map_size)
+	for (const auto& state : path)
+	{
+		os << state.location; // << "(" << state.is_single() << "),";
+	}
+	return os;
+}
+
+
+bool isSamePath(const Path& p1, const Path& p2)
+{
+	if (p1.size() != p2.size())
 		return false;
-	int curr_x = curr / num_col;
-	int curr_y = curr % num_col;
-	int next_x = next / num_col;
-	int next_y = next % num_col;
-	return abs(next_x - curr_x) + abs(next_y - curr_y) < 2;
+	for (unsigned i = 0; i < p1.size(); i++)
+	{
+		if (p1[i].location != p2[i].location)
+			return false;
+	}
+	return true;
 }
 
-std::ostream& operator<<(std::ostream& os, const Constraint& constraint)
-{
-	os << "<" << std::get<0>(constraint) << "," << std::get<1>(constraint) << "," <<
-		std::get<2>(constraint) << ">";
-	return os;
+vector<double> softmax(const vector<double>& logits) {
+    double max_logit = *std::max_element(logits.begin(), logits.end());
+
+    std::vector<double> exps(logits.size());
+    for (size_t i = 0; i < logits.size(); ++i) {
+        exps[i] = std::exp(logits[i] - max_logit);
+    }
+
+    double sum_exps = 0.0;
+    for (double exp_val : exps) {
+        sum_exps += exp_val;
+    }
+
+    std::vector<double> probabilities(logits.size());
+    for (size_t i = 0; i < logits.size(); ++i) {
+        probabilities[i] = exps[i] / sum_exps;
+    }
+
+    return probabilities;
 }
 
-std::ostream& operator<<(std::ostream& os, const Conflict& conflict)
-{
-	os << "<" << std::get<0>(conflict) << "," << std::get<1>(conflict) << "," <<
-		std::get<2>(conflict) << "," << std::get<3>(conflict) << "," <<
-		std::get<4>(conflict) << ">";
-	return os;
+
+vector<double> epsilon_greedy(const vector<double>& h_weights) {
+
+    std::vector<double> probabilities(h_weights.size());
+    
+	if (h_weights.at(0) > h_weights.at(1))
+	{
+		probabilities.at(0) = .95;
+		probabilities.at(1) = .05;
+	}
+	else
+	{
+		probabilities.at(0) = .05;
+		probabilities.at(1) = .95;
+	}
+
+    return probabilities;
 }

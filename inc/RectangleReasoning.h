@@ -1,53 +1,79 @@
 #pragma once
-#include <tuple>
-#include <vector>
-#include <list>
-
-#include "LLNode.h"
-#include "ICBSNode.h"
 #include "MDD.h"
-// add a pair of barrier constraints
-void addBarrierConstraints(int S1, int S2, int S1_t, int S2_t, int Rg, int num_col,
-	std::list<std::tuple<int, int, int>>& constraints1, std::list<std::tuple<int, int, int>>& constraints2);
 
-// add a pair of modified barrier constraints
-void addModifiedBarrierConstraints(const std::vector<PathEntry>& path1, const std::vector<PathEntry>& path2, 
-	const MDD* mdd1, const MDD* mdd2, int S1_t, int S2_t, int Rg, int num_col,
-	std::list<std::tuple<int, int, int>>& constraints1, std::list<std::tuple<int, int, int>>& constraints2);
+//enum rectangle_strategy { NR, R, RM, DISJOINTR };
 
-// add a vertival modified barrier constraint
-void addModifiedVerticalBarrierConstraint(const MDD* mdd, int y, int Ri_x, int Rg_x, int Rg_t, int num_col,
-	std::list<std::tuple<int, int, int>>& constraints);
+class RectangleReasoning
+{
+public:
+	//rectangle_strategy strategy;
+	double accumulated_runtime = 0;
 
-// add a horizontal modified barrier constraint
-void addModifiedHorizontalBarrierConstraint(const MDD* mdd, int x, int Ri_y, int Rg_y, int Rg_t, int num_col,
-	std::list<std::tuple<int, int, int>>& constraints);
+	RectangleReasoning(const Instance& instance) : instance(instance) {}
 
-//Identify rectangle conflicts
-bool isRectangleConflict(const std::pair<int,int>& s1, const std::pair<int, int>& s2, 
-	const std::pair<int, int>& g1, const std::pair<int, int>& g2, int g1_t, int g2_t);// for CR and R
-bool isRectangleConflict(int s1, int s2, int g1, int g2, int num_col);// for RM
+	shared_ptr<Conflict> run(const vector<Path*>& paths, int timestep, 
+		int a1, int a2, const MDD* mdd1, const MDD* mdd2);
 
-//Classify rectangle conflicts
-int classifyRectangleConflict(const std::pair<int, int>& s1, const std::pair<int, int>& s2,
-	const std::pair<int, int>& g1, const std::pair<int, int>& g2);// for CR and R
-int classifyRectangleConflict(int s1, int s2, int g1, int g2, const std::pair<int, int>& Rg, int num_col);// for RM
 
-//Compute rectangle corners
-std::pair<int, int> getRg(const std::pair<int, int>& s1, const std::pair<int, int>& g1, const std::pair<int, int>& g2);
-std::pair<int, int> getRs(const std::pair<int, int>& s1, const std::pair<int, int>& s2, const std::pair<int, int>& g1);
+private:
+	const Instance& instance;
+	shared_ptr<Conflict> findRectangleConflictByRM(const vector<Path*>& paths, int timestep,
+		int a1, int a2, const MDD* mdd1, const MDD* mdd2);
+	shared_ptr<Conflict> findRectangleConflictByGR(const vector<Path*>& paths, int timestep,
+		int a1, int a2, const MDD* mdd1, const MDD* mdd2);
 
-//Compute start and goal candidates for RM
-std::list<int> getStartCandidates(const std::vector<PathEntry>& path, int timestep, int num_col);
-std::list<int> getGoalCandidates(const std::vector<PathEntry>& path, int timestep, int num_col);
+	bool ExtractBarriers(const MDD& mdd, int loc, int timestep, int dir, int dir2, int start, int goal, int start_time, list<Constraint>& B);
+	bool isEntryBarrier(const Constraint& b1, const Constraint& b2, int dir1);
+	bool isExitBarrier(const Constraint& b1, const Constraint& b2, int dir1);
+	pair<int, int> getIntersection(const Constraint& b1, const Constraint& b2);
+	bool blockedNodes(const vector<PathEntry>& path,
+		const pair<int, int>& Rs, const pair<int, int>& Rg, int Rg_t, int dir);
+	bool isCut(const Constraint& b, const pair<int, int>& Rs, const pair<int, int>& Rg);
 
-// whether the path between loc1 and loc2 is Manhattan-optimal
-bool isManhattanOptimal(int loc1, int loc2, int dt, int num_col);
+	void generalizedRectangle(const vector<PathEntry>& path1, const vector<PathEntry>& path2, const MDD& mdd1, const MDD& mdd2,
+		const list<Constraint>& B1, const list<Constraint>& B2, int timestep,
+		int& best_type, pair<int, int>& best_Rs, pair<int, int>& best_Rg);
 
-// whther two rectangle conflicts are idenitical
-bool equalRectangleConflict(const std::tuple<int, int, int, int, int>& c1, const std::tuple<int, int, int, int, int>& c2);
+	//Identify rectangle conflicts
+	bool isRectangleConflict(const pair<int, int>& s1, const pair<int, int>& s2,
+		const pair<int, int>& g1, const pair<int, int>& g2, int g1_t, int g2_t);// for CR and R
+	bool isRectangleConflict(const pair<int, int>& s1, const pair<int, int>& s2, const pair<int, int>& g1, const pair<int, int>& g2) const;// for RM
 
-// find duplicate rectangle conflicts, used to detect whether a semi-/non-cardinal rectangle conflict is unique
-bool findRectangleConflict(const ICBSNode* curr, const std::tuple<int, int, int, int, int>& conflict); 
+	//Classify rectangle conflicts
+	int classifyRectangleConflict(const pair<int, int>& s1, const pair<int, int>& s2,
+		const pair<int, int>& g1, const pair<int, int>& g2);// for CR and R
+	int classifyRectangleConflict(const pair<int, int>& s1, const pair<int, int>& s2, const pair<int, int>& g1, const pair<int, int>& g2, const pair<int, int>& Rg);// for RM
 
-int getRectangleTime(const Conflict& conflict, const std::vector<std::vector<PathEntry>*>& paths, int num_col);
+	 //Compute rectangle corners
+	pair<int, int> getRg(const pair<int, int>& s1, const pair<int, int>& g1, const pair<int, int>& g2);
+	pair<int, int> getRs(const pair<int, int>& s1, const pair<int, int>& s2, const pair<int, int>& g1);
+
+	//Compute start and goal candidates for RM
+	list<int> getStartCandidates(const Path& path, const MDD& mdd, int timestep);
+	list<int> getGoalCandidates(const Path& path, const MDD& mdd, int timestep);
+	//Compute start and goal candidates for GR
+	int getStartCandidate(const Path& path, int dir1, int dir2, int timestep);
+	int getGoalCandidate(const Path& path, int dir1, int dir2, int timestep);
+
+
+	// int getRectangleTime(const Conflict& conflict, const std::vector<std::vector<PathEntry>*>& paths, int num_col);
+	bool hasNodeOnBarrier(const MDD* mdd, int y_start, int y_end, int x, int t_min, bool horizontal) const;
+
+	bool addModifiedBarrierConstraints(int a1, int a2, const pair<int, int>& Rs, const pair<int, int>& Rg,
+		const pair<int, int>& s1, const pair<int, int>& s2, int Rg_t,
+		const MDD* mdd1, const MDD* mdd2,
+		list<Constraint>& constraint1, list<Constraint>& constraint2); // for RM
+
+	// add a horizontal modified barrier constraint
+	bool addModifiedHorizontalBarrierConstraint(int agent, const MDD* mdd, int x,
+		int Ri_y, int Rg_y, int Rg_t, list<Constraint>& constraints);
+
+	// add a vertival modified barrier constraint
+	bool addModifiedVerticalBarrierConstraint(int agent, const MDD* mdd, int y,
+		int Ri_x, int Rg_x, int Rg_t, list<Constraint>& constraints);
+
+	bool blocked(const Path& path, const list<Constraint>& constraints);
+	bool traverse(const Path& path, int loc, int t);
+
+};
+

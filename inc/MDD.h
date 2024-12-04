@@ -1,7 +1,6 @@
 #pragma once
-
-#include "ICBSNode.h"
-#include "SingleAgentICBS.h"
+#include "SingleAgentSolver.h"
+#include "ECBSNode.h"
 
 
 class MDDNode
@@ -10,17 +9,18 @@ public:
 	MDDNode(int currloc, MDDNode* parent)
 	{
 		location = currloc; 
-		if (parent == nullptr)
+		if(parent == nullptr)
 			level = 0;
 		else
 		{
 			level = parent->level + 1;
 			parents.push_back(parent);
 		}
-		//parent = nullptr;
 	}
+	MDDNode(int location, int t): location(location), level(t) {}
 	int location;
 	int level;
+  int cost; // minimum cost of path traversing this MDD node
 
 	bool operator == (const MDDNode & node) const
 	{
@@ -28,100 +28,39 @@ public:
 	}
 
 
-	std::list<MDDNode*> children;
-	std::list<MDDNode*> parents;
-	//MDDNode* parent;
+	list<MDDNode*> children;
+	list<MDDNode*> parents;
 };
-
-
 
 class MDD
 {
-public:
-	std::vector<std::list<MDDNode*>> levels;
+private:
+    const SingleAgentSolver* solver;
 
-	bool buildMDD(const std::vector < std::list< std::pair<int, int> > >& constraints, 
-		int numOfLevels, const SingleAgentICBS & solver);
-	bool buildMDD(const std::vector <std::list< std::pair<int, int> > >& constraints, int numOfLevels,
-		int start_location, const int* moves_offset, const std::vector<int>& my_heuristic, int map_size, int num_col);
+public:
+	vector<list<MDDNode*>> levels;
+
+	bool buildMDD(const ConstraintTable& ct,
+		int num_of_levels, const SingleAgentSolver* solver); // build mdd of given levels
+	bool buildMDD(ConstraintTable& ct, const SingleAgentSolver* solver); // build minimal MDD
+	// bool buildMDD(const std::vector <std::list< std::pair<int, int> > >& constraints, int numOfLevels,
+	// 	int start_location, const int* moves_offset, const std::vector<int>& my_heuristic, int map_size, int num_col);
 
 	MDDNode* find(int location, int level) const;
 	void deleteNode(MDDNode* node);
 	void clear();
-	bool isConstrained(int curr_id, int next_id, int next_timestep, const std::vector< std::list< std::pair<int, int> > >& cons) const;
+	// bool isConstrained(int curr_id, int next_id, int next_timestep, const std::vector< std::list< std::pair<int, int> > >& cons) const;
 
-	MDD(){};
+    void increaseBy(const ConstraintTable&ct, int dLevel, SingleAgentSolver* solver);
+    MDDNode* goalAt(int level);
+    void printNodes() const;
+
+	MDD()= default;;
 	MDD(const MDD & cpy);
 	~MDD();
 };
 
-
-struct ConstraintsHasher // Hash a CT node by constraints on one agent
-{
-	int a;
-	const ICBSNode* n;
-
-	ConstraintsHasher() {};
-	ConstraintsHasher(int a, const ICBSNode* n) : a(a), n(n) {};
-
-	struct EqNode
-	{
-		bool operator() (const ConstraintsHasher& c1, const ConstraintsHasher& c2) const
-		{
-			std::set<Constraint> cons1, cons2;
-			const ICBSNode* curr = c1.n;
-			while (curr->parent != nullptr)
-			{
-				if (curr->agent_id == c1.a)
-					for (auto con : curr->constraints)
-						cons1.insert(con);
-				curr = curr->parent;
-			}
-			curr = c2.n;
-			while (curr->parent != nullptr)
-			{
-				if (curr->agent_id == c1.a)
-					for (auto con : curr->constraints)
-						cons2.insert(con);
-				curr = curr->parent;
-			}
-			if (cons1.size() != cons2.size())
-				return false;
-
-			if (!equal(cons1.begin(), cons1.end(), cons2.begin()))
-				return false;
-			else
-				return true;
-		}
-	};
-
-	struct Hasher
-	{
-		std::size_t operator()(const ConstraintsHasher& entry) const
-		{
-			const ICBSNode* curr = entry.n;
-			size_t cons_hash = 0;
-			while (curr->parent != nullptr)
-			{
-				if (curr->agent_id == entry.a)
-				{
-					for (auto con : curr->constraints)
-					{
-						cons_hash += 3 * std::hash<int>()(std::get<0>(con)) + 5 * std::hash<int>()(std::get<1>(con)) + 7 * std::hash<int>()(std::get<2>(con));
-					}
-				}
-				curr = curr->parent;
-			}
-			return (cons_hash << 1);
-		}
-	};
-};
-
-
-
-
-typedef boost::unordered_map<ConstraintsHasher, MDD*, ConstraintsHasher::Hasher, ConstraintsHasher::EqNode> MDDTable;
-
+std::ostream& operator<<(std::ostream& os, const MDD& mdd);
 
 class SyncMDDNode
 {
@@ -134,7 +73,7 @@ public:
 			//level = parent->level + 1;
 			parents.push_back(parent);
 		}
-		//parent = nullptr;
+		//parent = NULL;
 	}
 	int location;
 	//int level;
@@ -145,9 +84,9 @@ public:
 	}
 
 
-	std::list<SyncMDDNode*> children;
-	std::list<SyncMDDNode*> parents;
-	std::list<const MDDNode*> coexistingNodesFromOtherMdds;
+	list<SyncMDDNode*> children;
+	list<SyncMDDNode*> parents;
+	list<const MDDNode*> coexistingNodesFromOtherMdds;
 
 };
 
@@ -155,16 +94,45 @@ public:
 class SyncMDD
 {
 public:
-	std::vector<std::list<SyncMDDNode*>> levels;
+	vector<list<SyncMDDNode*>> levels;
 
 	SyncMDDNode* find(int location, int level) const;
 	void deleteNode(SyncMDDNode* node, int level);
 	void clear();
 
-	SyncMDD(const MDD & cpy);
+	explicit SyncMDD(const MDD & cpy);
 	~SyncMDD();
 };
 
+class MDDTable
+{
+public:
+	double accumulated_runtime = 0;  // runtime of building MDDs
+	uint64_t num_released_mdds = 0; // number of released MDDs ( to save memory)
 
-// Match and prune MDD according to another MDD.
-bool SyncMDDs(const MDD &mdd1, const MDD& mdd2);
+	MDDTable(const vector<ConstraintTable>& initial_constraints,
+						const vector<SingleAgentSolver*>& search_engines):
+		initial_constraints(initial_constraints), search_engines(search_engines) {}
+	
+	void init(int number_of_agents)
+	{
+		lookupTable.resize(number_of_agents);
+	}
+	~MDDTable() { clear(); }
+
+	MDD* findMDD(HLNode& node, int agent) const;
+	MDD * getMDD(HLNode& node, int agent, int mdd_levels = -1);
+	// void findSingletons(HLNode& node, int agent, Path& path);
+	void clear();
+private:
+	int max_num_of_mdds = 10000; // per agent
+
+	vector<unordered_map<ConstraintsHasher, MDD*, 
+		ConstraintsHasher::Hasher, ConstraintsHasher::EqNode> >lookupTable;
+
+	const vector<ConstraintTable>& initial_constraints;
+	const vector<SingleAgentSolver*>& search_engines;
+	void releaseMDDMemory(int id);
+};
+
+unordered_map<int, MDDNode*> collectMDDlevel(MDD* mdd, int i);
