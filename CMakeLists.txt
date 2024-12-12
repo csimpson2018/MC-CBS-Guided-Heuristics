@@ -1,17 +1,22 @@
 project(eecbs)
 
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required(VERSION 3.14)
 
-IF(NOT CMAKE_BUILD_TYPE)
-    SET(CMAKE_BUILD_TYPE "RELEASE")
-ENDIF()
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release")
+endif()
 
 set(Boost_USE_STATIC_LIBS ON)
 
 include(FetchContent)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-set(CMAKE_EXE_LINKER_FLAGS " -static")
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
 include_directories("inc")
 file(GLOB SOURCES "src/*.cpp")
@@ -21,8 +26,9 @@ FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download
 FetchContent_MakeAvailable(json)
 
 add_executable(eecbs_MCR ${SOURCES})
+target_compile_features(eecbs_MCR PRIVATE cxx_std_17)
 
 # Find Boost
 find_package(Boost REQUIRED COMPONENTS program_options system filesystem)
-include_directories( ${Boost_INCLUDE_DIRS} )
+include_directories(${Boost_INCLUDE_DIRS})
 target_link_libraries(eecbs_MCR ${Boost_LIBRARIES} nlohmann_json::nlohmann_json)

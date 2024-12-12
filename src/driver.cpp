@@ -35,7 +35,8 @@ int main(int argc, char** argv)
 
 		// params for CBS node selection strategies
 		("highLevelSolver", po::value<string>()->default_value("MCR"), "the high-level solver (A*, A*eps, EES, NEW, MCR)")
-		("heuristicGuide", po::value<string>()->default_value("Zero"), "guide for heuristic choice of node selection (Zero, Epsilon, Softmax)")
+		//("heuristicGuide", po::value<string>()->default_value("Zero"), "guide for heuristic choice of node selection (Zero, Epsilon, Softmax)")
+		("heuristicGuide", po::value<string>()->default_value("Priority"), "guide for heuristic choice of node selection (Zero, Epsilon, Softmax)")
 		("lowLevelSolver", po::value<bool>()->default_value(true), "using suboptimal solver in the low level")
 		("inadmissibleH", po::value<string>()->default_value("Zero"), "inadmissible heuristics (Zero, Global, Path, Local, Conflict)")
 		("suboptimality", po::value<double>()->default_value(5.0), "suboptimality bound")
@@ -90,6 +91,8 @@ int main(int argc, char** argv)
 		g = heuristic_guide::SOFTMAX;
 	else if (vm["heuristicGuide"].as<string>() == "Epsilon")
 		g = heuristic_guide::EPSILON;
+	else if (vm["heuristicGuide"].as<string>() == "Priority")
+		g = heuristic_guide::PRIORITY;
 	else
 	{
 		cout << "WRONG heuristic guide!" << endl;
@@ -117,11 +120,12 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	if (h == heuristics_type::ZERO && g != heuristic_guide::ZERO)
-	{
-		cout << "Cannot select heuristic guide without a heuristic!" << endl;
-		return -1;
-	}
+	//comment this if condition
+	// if (h == heuristics_type::ZERO && g != heuristic_guide::ZERO)
+	// {
+	// 	cout << "Cannot select heuristic guide without a heuristic!" << endl;
+	// 	return -1;
+	// }
 
     if ((h == heuristics_type::CG || h == heuristics_type::DG) && vm["lowLevelSolver"].as<bool>())
     {

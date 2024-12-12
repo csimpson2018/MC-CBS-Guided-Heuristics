@@ -1664,6 +1664,9 @@ void CBS::addConstraints(const HLNode* curr, HLNode* child1, HLNode* child2) con
 	{
 		child1->constraints = curr->conflict->constraint1;
 		child2->constraints = curr->conflict->constraint2;
+		//associate child to agent
+		child1->agent = curr->conflict->a1;
+		child2->agent = curr->conflict->a2;
 	}
 }
 

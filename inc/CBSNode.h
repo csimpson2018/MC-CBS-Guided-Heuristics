@@ -45,6 +45,8 @@ public:
 	int distance_error = 0;
 	int cost_error = 0;
 	bool fully_expanded = false;
+	
+	int agent;
 
 	HLNode* parent = nullptr;
 	list<HLNode*> children;

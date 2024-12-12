@@ -184,6 +184,34 @@ bool ECBS::solve(double time_limit, int _cost_lowerbound)
 								}
 							}
 						}
+						else if (guide_type == heuristic_guide::PRIORITY){
+							
+							if(child[0]->agent > child[1]->agent){
+								if(solved[0]) {
+									pushNode(child[0]);
+									cout << "Pushing Child1" <<endl;
+									curr->children.push_back(child[0]);
+								}
+								else{
+									cout << "Deadnode inside  Child1" <<endl;
+									recordDeadNode(curr);
+									return solution_found;
+								}
+
+							}
+							else{
+								if(solved[1]) {
+									pushNode(child[1]);
+									cout << "Pushing Child0" <<endl;
+									curr->children.push_back(child[1]);
+								}
+								else{
+									cout << "Deadnode inside  Child0" <<endl;
+									recordDeadNode(curr);
+									return solution_found;
+								}
+							}
+						}
 						else if (guide_type == heuristic_guide::SOFTMAX)
 						{
 							double chance = dist(generator);

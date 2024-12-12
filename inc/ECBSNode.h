@@ -72,6 +72,7 @@ public:
 	pairing_heap< ECBSNode*, compare<ECBSNode::compare_node_by_inadmissible_f> >::handle_type open_handle;
 	pairing_heap< ECBSNode*, compare<ECBSNode::compare_node_by_d> >::handle_type focal_handle;
 
+	//create a priority variable here may be
 	int sum_of_costs = 0;  // sum of costs of the paths
 	ECBSNode* parent = nullptr;
 	list< pair< int, pair<Path, int> > > paths; // new paths <agent id, <path, min f>>	

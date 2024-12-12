@@ -10,7 +10,7 @@
 #include <random>
 
 enum class high_level_solver_type { ASTAR, ASTAREPS, NEW, EES, MCR };
-enum class heuristic_guide {EPSILON, SOFTMAX, ZERO};
+enum class heuristic_guide {EPSILON, SOFTMAX, ZERO, PRIORITY};
 
 class CBS
 {
