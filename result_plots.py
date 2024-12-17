@@ -3,12 +3,13 @@ import glob
 import os
 import subprocess
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 heuristic_values = ["Zero", "Epsilon", "Softmax", "Priority"]
 exec_path = "./eecbs_MCR"
-map_file = "random-32-32-20.map"
-scen_file = "random-32-32-20-random-1.scen"
+map_file = "./compare_folder/room-32-32-4.map-scen-random/room-32-32-4.map"
+#scen_file = "random-32-32-20-random-1.scen"
 k_value = 50
 t_value = 60
 suboptimality = 1.2
@@ -31,50 +32,72 @@ def delete_files():
             print(f"Failed to delete {file}. Reason: {e}")
 
 delete_files()
+map_folder="./compare_folder/room-32-32-4.map-scen-random/scen-random"
+scenarios = glob.glob(os.path.join(map_folder, "*.scen")) 
 
-for i in [10,20,30,40,50,60,70,80,90,100]:  # Rollouts
-    for heuristic_value in heuristic_values:
-        for j in range(i): 
-            output_csv = f"guide_{heuristic_value}_output.csv"
-            output_paths = f"guide_{heuristic_value}_paths.txt"
+#calculate the success rate for all the scenarros for that rollout
+     #1/25 success rate..min run time & suboptimality for that scenario in any rollout. #if not successful maximum runtime , cant assign the suboptimality. 
+     #check only common scenarios for each solver & then compare
+     #ignore that scenarios if solvers havent solved anything common
 
-            command = [
-                exec_path,
-                "-m", map_file,
-                "-a", scen_file,
-                "-o", output_csv,
-                "--outputPaths", output_paths,
-                "-k", str(k_value),
-                "-t", str(t_value),
-                "--suboptimality", str(suboptimality),
-                "--heuristicGuide", heuristic_value
-            ]
+            #how to calculate the success rate
+            #runtime & suboptimality only for succesful ones or everything
 
-            subprocess.run(command)
+for heuristic_value in heuristic_values:
+    for num_rollouts in [1,2, 4, 8, 16, 32, 96]:  # Rollouts
+        scenario_success = 0  # Count of successful scenarios
+        total_scenarios = len(scenarios)
 
-            df = pd.read_csv(output_csv)
-
-            successful = df[df['solution cost'] != -2]
-
-            # if successful.empty:
-            #     print(f"{file}: No successful rows")
-            #     continue
-
-            average_runtime = successful['runtime'].mean()
-            average_cost_ratio = (successful['solution cost'] / successful['sum of costs']).mean()
-            num_successful_rows = successful.shape[0]
-            success_rate = num_successful_rows / i
-
-
-            if i not in results[heuristic_value]:
-                results[heuristic_value][i] = {}
+        best_runtime_overall = float("inf")
+        best_suboptimality_overall = float("inf")
+        
+        for scen_file in scenarios:
+            print(scen_file)
+            scenario_success_flag = False  # Track if this scenario is solved
             
-            results[heuristic_value][i] = {
-                "success_rate": success_rate,
-                "average_runtime": average_runtime,
-                "suboptimality": average_cost_ratio
-            }
-    
+            for rollout in range(num_rollouts):
+                output_csv = f"guide_{heuristic_value}_output.csv"
+                output_paths = f"guide_{heuristic_value}_paths.txt"
+
+                command = [
+                    exec_path,
+                    "-m", map_file,
+                    "-a", scen_file,
+                    "-o", output_csv,
+                    "--outputPaths", output_paths,
+                    "-k", str(k_value),
+                    "-t", str(t_value),
+                    "--suboptimality", str(suboptimality),
+                    "--heuristicGuide", heuristic_value
+                ]
+
+                subprocess.run(command)
+
+                df = pd.read_csv(output_csv)
+
+                successful = df[(df['solution cost'] > 0)]
+                
+                if not successful.empty:
+                    scenario_success_flag = True  # Mark this scenario as solved
+                    best_runtime_overall = min(best_runtime_overall, successful['runtime'].min())
+                    best_suboptimality_overall = min(
+                        best_suboptimality_overall,
+                        (successful['solution cost'] / successful['sum of costs']).min()
+                    )
+            print("Completed")
+
+            if scenario_success_flag:
+                scenario_success += 1
+
+        if num_rollouts not in results[heuristic_value]:
+            results[heuristic_value][num_rollouts] = {}
+
+        results[heuristic_value][num_rollouts] = {
+            "success_rate": scenario_success / total_scenarios,
+            "runtime": best_runtime_overall if best_runtime_overall != float("inf") else None,
+            "suboptimality": best_suboptimality_overall if best_suboptimality_overall != float("inf") else None
+        }
+
     delete_files()
 
 data = []
@@ -85,7 +108,7 @@ for heuristic in heuristic_values:
             "heuristic": heuristic,
             "rollouts": i,
             "success_rate": results[heuristic][i]["success_rate"],
-            "average_runtime": results[heuristic][i]["average_runtime"],
+            "runtime": results[heuristic][i]["runtime"],
             "suboptimality": results[heuristic][i]["suboptimality"]
         })
 print(data)
@@ -107,11 +130,12 @@ plt.legend(title="Heuristic Guide")
 plt.subplot(2, 2, 2)
 for heuristic_value in heuristic_values:
     subset = df_results[df_results["heuristic"] == heuristic_value]
-    plt.plot(subset["rollouts"], subset["average_runtime"], label=heuristic_value, marker='o')
+    plt.plot(subset["rollouts"], subset["runtime"], label=heuristic_value, marker='o')
 plt.xlabel("Number of Rollout")
-plt.ylabel("Average Runtime (s)")
+plt.ylabel("Runtime (s)")
 plt.title("Runtime vs Number of Rollouts")
 plt.legend(title="Heuristic Guide")
+
 
 # Suboptimality vs number of rollouts
 plt.subplot(2, 2, 3)
